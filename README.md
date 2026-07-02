@@ -26,3 +26,5 @@ Before running or building the application, ensure your system has the following
 1. **Windows OS** (64-bit recommended)
 2. **ViGEmBus Driver:** The application relies on the Virtual Gamepad Emulation Bus. Download and install the latest release from the official repository or vendor installer.
   https://github.com/nefarius/ViGEmBus/releases#release-v1.22.0
+
+**Project implemented using AI**
