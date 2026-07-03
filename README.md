@@ -1,4 +1,4 @@
-"" IMPORTANT
+## IMPORTANT
 
 This app is made *ONLY* for emulators. Using the app with native PC games may result in your account being *banned*.
 
