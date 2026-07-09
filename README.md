@@ -43,3 +43,6 @@ Since VGamepad is distributed as a standalone executable, no Python installation
 Use the profile keys to switch between **Soldier**, **Vehicle**, and **Plane** contexts. The UI dynamically destroys and rebuilds the macro rows and settings on the fly, loading the precise configuration stored for that specific profile without requiring an application restart.
 
 **Project implemented using AI**
+
+### My Discord channel
+https://discord.gg/k7WNAnPtsZ
