@@ -16,7 +16,7 @@
 # - Controller Passthrough via Pygame integration (Simultaneous KB+M support)
 # - Extended mouse mapping (mouse1-5, scroll_up/down)
 # - Mouse wheel scroll support added for UI menu/tab navigation
-# - Version v1.0
+# - Version v1.1
 #
 # Requires: vgamepad, pynput, pygame, requests, ViGEmBus driver installed on Windows
 
@@ -36,7 +36,7 @@ from tkinter import ttk, messagebox, filedialog
 import pygame
 
 # --- Sovelluksen nykyinen versio ---
-CURRENT_VERSION = "v1.0"
+CURRENT_VERSION = "v1.1"
 GITHUB_REPO = "CheeseJuusto/VGamepad" 
 
 # --- Oletuskonfiguraatio ---
@@ -112,7 +112,7 @@ DEFAULT_CONFIG = {
     },
     "menu_buttons": {"up":"up","down":"down","left":"left","right":"right","select":"enter","back":"backspace"},
     "game_settings": {
-        "executable_path": "WORK IN PROGRESS!!",
+        "executable_path": "",
         "arguments": "--no-gui \"%RPCS3_GAMEID%:NPEB00092\""
     },
     "controller_passthrough": {
@@ -644,40 +644,84 @@ def on_click(x, y, button, pressed):
 
 def on_scroll(x, y, dx, dy):
     global recording_target, recording_widget
+
     if not cfg.get("emulation_enabled", True) and not recording_target:
         return
-        
+
     keyname = "scroll_up" if dy > 0 else "scroll_down"
+
+    # Tallennustila
     if recording_target:
         ttype, tkey = recording_target
         bind_and_save(ttype, tkey, keyname, recording_widget)
         recording_target = None
-        try: app.status_var.set(f"Bound {keyname}")
-        except Exception: pass
+        try:
+            app.status_var.set(f"Bound {keyname}")
+        except Exception:
+            pass
         return
 
+    def pulse_button(xinp):
+        if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
+            triggers_pressed.add(xinp)
+            threading.Thread(
+                target=lambda: (
+                    time.sleep(0.08),
+                    triggers_pressed.discard(xinp)
+                ),
+                daemon=True
+            ).start()
+        else:
+            buttons_pressed.add(xinp)
+            threading.Thread(
+                target=lambda: (
+                    time.sleep(0.08),
+                    buttons_pressed.discard(xinp)
+                ),
+                daemon=True
+            ).start()
+
+    # Tavalliset näppäinbindit
     for ps_key, entry in cfg.get("keyboard", {}).items():
         actual_bind = entry.get("bind_key")
-        if cfg.get("profiles_enabled", False) and current_profile_context == "vehicle":
-            actual_bind = cfg.get("keyboard_vehicle", {}).get(ps_key, actual_bind)
-            if ps_key == "l1": actual_bind = "w"
-            elif ps_key == "l2": actual_bind = "s"
-            elif ps_key == "r2": actual_bind = "mouse2"
-        elif cfg.get("profiles_enabled", False) and current_profile_context == "plane":
-            actual_bind = cfg.get("keyboard_plane", {}).get(ps_key, actual_bind)
-            if ps_key == "l1": actual_bind = "w"
-            elif ps_key == "l2": actual_bind = "s"
-            elif ps_key == "r2": actual_bind = "mouse2"
+
+        if cfg.get("profiles_enabled", False):
+            if current_profile_context == "vehicle":
+                actual_bind = cfg.get("keyboard_vehicle", {}).get(ps_key, actual_bind)
+            elif current_profile_context == "plane":
+                actual_bind = cfg.get("keyboard_plane", {}).get(ps_key, actual_bind)
 
         if actual_bind == keyname:
-            xinp = entry.get("xinput", "").upper()
+            pulse_button(entry.get("xinput", "").upper())
+
+    # Custom-bindit
+    c_count = int(cfg.get("custom_count", len(cfg.get("custom_inputs", []))))
+    for idx, ci in enumerate(cfg.get("custom_inputs", [])):
+        if idx >= c_count:
+            break
+
+        if ci.get("bind_key") == keyname:
+            target = ci.get("target")
+            xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
             if xinp:
-                if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
-                    triggers_pressed.add(xinp)
-                    threading.Thread(target=lambda: [time.sleep(0.1), triggers_pressed.discard(xinp)]).start()
-                else:
-                    buttons_pressed.add(xinp)
-                    threading.Thread(target=lambda: [time.sleep(0.1), buttons_pressed.discard(xinp)]).start()
+                pulse_button(xinp)
+
+    # Valikkobindit
+    for mkey, bind in cfg.get("menu_buttons", {}).items():
+        if bind != keyname:
+            continue
+
+        mapping = {
+            "select": "A",
+            "back": "B",
+            "up": "DPAD_UP",
+            "down": "DPAD_DOWN",
+            "left": "DPAD_LEFT",
+            "right": "DPAD_RIGHT",
+        }
+
+        if mkey in mapping:
+            pulse_button(mapping[mkey])
 
 def update_loop():
     update_rate = int(cfg.get("update_rate_hz", 60))
@@ -1454,11 +1498,62 @@ class App(tk.Tk):
         if not exe:
             messagebox.showwarning("Execution Pipeline", "No binary context path declared inside environment.")
             return
+        
         import subprocess
+        import os
+        import time
         try:
-            cmd = f'"{exe}" {args}'
+            # 1. Puhdistetaan polku mahdollisista lainausmerkeistä
+            exe_clean = os.path.normpath(exe.strip('"'))
+            game_folder = os.path.dirname(exe_clean)
+            
+            # 2. KORJAUS ARGUMENTTEIHIN: 
+            # .bat tiedostossa %-merkit pitää tuplata (%%), muuten cmd.exe luulee niitä muuttujiksi ja tuhoaa ne.
+            # Esimerkki: --no-gui "%RPCS3_GAMEID%:NPEB00092" -> --no-gui "%%RPCS3_GAMEID%%:NPEB00092"
+            bat_args = args.replace('%', '%%')
+            
+            # 3. Luodaan väliaikainen bat-tiedosto samaan kansioon missä tämä työkalu on
+            bat_path = os.path.abspath("launch_game.bat")
+            
+            # Kirjoitetaan .bat tiedostoon komennot käyttäen korjattuja argumentteja (bat_args)
+            with open(bat_path, "w", encoding="utf-8") as bat_file:
+                bat_file.write("@echo off\n")
+                bat_file.write(f'cd /d "{game_folder}"\n')
+                if bat_args:
+                    bat_file.write(f'start "" "{exe_clean}" {bat_args}\n')
+                else:
+                    bat_file.write(f'start "" "{exe_clean}"\n')
+            
+            # 4. Käynnistetään luotu .bat tiedosto explorerin kautta.
+            cmd = f'explorer "{bat_path}"'
             subprocess.Popen(cmd, shell=True)
-            self.status_var.set("Target game execution environment spawned.")
+            
+            # 5. Poistetaan .bat tiedosto pienen viiveen jälkeen taustasäikeessä
+            def cleanup_bat():
+                time.sleep(1.5)
+                try:
+                    if os.path.exists(bat_path):
+                        os.remove(bat_path)
+                except Exception:
+                    pass
+
+            threading.Thread(target=cleanup_bat, daemon=True).start()
+            
+            self.status_var.set("Target game execution environment spawned via script wrapper.")
+        except Exception as e:
+            messagebox.showerror("Execution Pipeline Critical", f"Failed to instantiate target process tree:\n{e}")
+            
+            def cleanup_bat():
+                time.sleep(1.5) # Odotetaan hetki että peli ehtii käynnistyä
+                try:
+                    if os.path.exists(bat_path):
+                        os.remove(bat_path)
+                except Exception:
+                    pass # Jos tiedosto on vielä lukittu, jätetään se rauhaan
+
+            threading.Thread(target=cleanup_bat, daemon=True).start()
+            
+            self.status_var.set("Target game execution environment spawned via script wrapper.")
         except Exception as e:
             messagebox.showerror("Execution Pipeline Critical", f"Failed to instantiate target process tree:\n{e}")
 
