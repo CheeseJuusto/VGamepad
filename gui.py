@@ -36,7 +36,7 @@ from tkinter import ttk, messagebox, filedialog
 import pygame
 
 # --- Sovelluksen nykyinen versio ---
-CURRENT_VERSION = "v1.1"
+CURRENT_VERSION = "v1.2"
 GITHUB_REPO = "CheeseJuusto/VGamepad" 
 
 # --- Oletuskonfiguraatio ---
@@ -68,30 +68,30 @@ DEFAULT_CONFIG = {
         "sensitivity_y": 3.2,
         "deadzone_x": 0.0,
         "deadzone_y": 0.0,
-        "linearity": 0.58,
+        "linearity": 1.0,
         "invert_y": True,
-        "pixel_to_unit": 17.0,
-        "smoothing_samples": 5
+        "pixel_to_unit": 20.0,
+        "smoothing_samples": 3
     },
     "mouse_profiles": {
         "vehicle": {
-            "sensitivity_x": 3.0,
-            "sensitivity_y": 3.2,
+            "sensitivity_x": 4.0,
+            "sensitivity_y": 4.2,
             "deadzone_x": 0.0,
             "deadzone_y": 0.0,
-            "linearity": 0.58,
+            "linearity": 1.0,
             "invert_y": True
         },
         "plane": {
-            "sensitivity_x": 6.0,
-            "sensitivity_y": 6.4,
+            "sensitivity_x": 8.0,
+            "sensitivity_y": 8.4,
             "deadzone_x": 0.0,
             "deadzone_y": 0.0,
-            "linearity": 0.58,
+            "linearity": 1.8,
             "invert_y": True
         }
     },
-    "update_rate_hz": 60,
+    "update_rate_hz": 120,
     "hotkeys": {
         "toggle_lock": "f5",
         "toggle_emulation": "f6"
@@ -121,7 +121,8 @@ DEFAULT_CONFIG = {
     }
 }
 
-CONFIG_FILE = "config.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(BASE_DIR, "config.json")
 
 def load_config():
     try:
@@ -143,7 +144,7 @@ def load_config():
                         "sensitivity_y": loaded["mouse"].get("sensitivity_y", 3.2),
                         "deadzone_x": loaded["mouse"].get("deadzone_x", 0.0),
                         "deadzone_y": loaded["mouse"].get("deadzone_y", 0.0),
-                        "linearity": loaded["mouse"].get("linearity", 0.58),
+                        "linearity": loaded["mouse"].get("linearity", 1.0),
                         "invert_y": loaded["mouse"].get("invert_y", True)
                     }
 
@@ -250,7 +251,7 @@ def apply_deadzone_value(v, dz):
 
 def apply_linearity(v, gamma):
     sign = 1 if v >= 0 else -1
-    return sign * (abs(v) ** gamma)
+    return sign * (abs(v) ** (1.0 / gamma if gamma != 0 else 1.0))
 
 kb_listener = None
 ms_listener = None
@@ -539,25 +540,38 @@ def on_key_release(key):
             if mkey == "right" and "DPAD_RIGHT" in buttons_pressed: buttons_pressed.discard("DPAD_RIGHT")
 
 def on_move(x, y):
-    global last_real_pos, last_user_move_time, mouse_locked, screen_center
+    global last_real_pos, last_real_time, last_user_move_time, mouse_locked, screen_center
     if not cfg.get("emulation_enabled", True):
         return
         
     now = time.time()
-    if last_real_pos is None:
+    
+    if last_real_pos is None or last_real_time is None or (now - last_real_time) > 0.05:
         last_real_pos = (x, y)
+        last_real_time = now
         last_user_move_time = now
+        mouse_dx_queue.clear()
+        mouse_dy_queue.clear()
         return
+
+    dt = now - last_real_time
+    last_real_time = now
+
     dx = x - last_real_pos[0]
     dy = y - last_real_pos[1]
     last_real_pos = (x, y)
     last_user_move_time = now
+
     if mouse_locked:
         cx, cy = screen_center
         if x == cx and y == cy:
             return
-    mouse_dx_queue.append(dx)
-    mouse_dy_queue.append(dy)
+
+    if 0.0001 <= dt <= 0.2:
+        vx = dx / dt
+        vy = dy / dt
+        mouse_dx_queue.append(dx)
+        mouse_dy_queue.append(dy)
 
 def on_click(x, y, button, pressed):
     global recording_target, recording_widget
@@ -650,7 +664,6 @@ def on_scroll(x, y, dx, dy):
 
     keyname = "scroll_up" if dy > 0 else "scroll_down"
 
-    # Tallennustila
     if recording_target:
         ttype, tkey = recording_target
         bind_and_save(ttype, tkey, keyname, recording_widget)
@@ -724,21 +737,30 @@ def on_scroll(x, y, dx, dy):
             pulse_button(mapping[mkey])
 
 def update_loop():
-    update_rate = int(cfg.get("update_rate_hz", 60))
-    period = 1.0 / update_rate
     global last_user_move_time, mouse_locked, screen_center, last_real_pos, limiter_active, current_profile_context, gamepad
     
     pygame.init()
     pygame.joystick.init()
     
     while running:
+        start_time = time.perf_counter()  # Otetaan syklin aloitusaika muistiin
+
+        # Luetaan Hz-asetus SILMUKAN SISÄLLÄ, jotta se reagoi UI:n muutoksiin lennosta
+        update_rate = int(cfg.get("mouse", {}).get("update_rate_hz", cfg.get("update_rate_hz", 60)))
+        period = 1.0 / max(1, update_rate)
+
         if not cfg.get("emulation_enabled", True):
             if gamepad:
                 try:
                     gamepad.reset()
                     gamepad.update()
                 except Exception: pass
-            time.sleep(period)
+            
+            # Pidetään tauko ja siirrytään seuraavaan kierrokseen
+            elapsed = time.perf_counter() - start_time
+            sleep_time = period - elapsed
+            if sleep_time > 0:
+                time.sleep(sleep_time)
             continue
 
         pixel_to_unit = float(cfg.get("mouse", {}).get("pixel_to_unit", 20.0))
@@ -749,14 +771,14 @@ def update_loop():
             sens_y = float(p_data.get("sensitivity_y", 3.2))
             dead_x = float(p_data.get("deadzone_x", 0.0))
             dead_y = float(p_data.get("deadzone_y", 0.0))
-            gamma = float(p_data.get("linearity", 0.58))
+            gamma = float(p_data.get("linearity", 1.0))
             invert_y = bool(p_data.get("invert_y", True))
         else:
             sens_x = float(cfg.get("mouse", {}).get("sensitivity_x", 3.0))
             sens_y = float(cfg.get("mouse", {}).get("sensitivity_y", 3.2))
             dead_x = float(cfg.get("mouse", {}).get("deadzone_x", 0.0))
             dead_y = float(cfg.get("mouse", {}).get("deadzone_y", 0.0))
-            gamma = float(cfg.get("mouse", {}).get("linearity", 0.58))
+            gamma = float(cfg.get("mouse", {}).get("linearity", 1.0))
             invert_y = bool(cfg.get("mouse", {}).get("invert_y", True))
 
         passthrough_active = False
@@ -813,20 +835,29 @@ def update_loop():
 
         if target_rx == 0.0 and target_ry == 0.0:
             if mouse_dx_queue:
-                avg_dx = sum(mouse_dx_queue) / len(mouse_dx_queue)
-                avg_dy = sum(mouse_dy_queue) / len(mouse_dy_queue)
-                mouse_dx_queue.clear(); mouse_dy_queue.clear()
+                sum_dx = sum(mouse_dx_queue)
+                sum_dy = sum(mouse_dy_queue)
+                mouse_dx_queue.clear()
+                mouse_dy_queue.clear()
             else:
-                avg_dx = 0.0; avg_dy = 0.0
+                sum_dx = 0.0
+                sum_dy = 0.0
 
-            raw_x = (avg_dx / pixel_to_unit) * sens_x
-            raw_y = (avg_dy / pixel_to_unit) * sens_y
-            vx = max(-1.0, min(1.0, apply_deadzone_value(raw_x, dead_x)))
-            vy = max(-1.0, min(1.0, apply_deadzone_value(raw_y, dead_y)))
-            vx = max(-1.0, min(1.0, apply_linearity(vx, gamma)))
-            vy = max(-1.0, min(1.0, apply_linearity(vy, gamma)))
+            raw_x = (sum_dx / pixel_to_unit) * sens_x
+            raw_y = (sum_dy / pixel_to_unit) * sens_y
 
-            if invert_y: vy = -vy
+            vx = apply_deadzone_value(raw_x, dead_x)
+            vy = apply_deadzone_value(raw_y, dead_y)
+
+            if gamma != 1.0 and (vx != 0 or vy != 0):
+                vx = apply_linearity(vx, gamma)
+                vy = apply_linearity(vy, gamma)
+
+            vx = max(-1.0, min(1.0, vx))
+            vy = max(-1.0, min(1.0, vy))
+
+            if invert_y:
+                vy = -vy
             target_rx, target_ry = vx, vy
 
         if target_lx == 0.0 and target_ly == 0.0:
@@ -866,8 +897,13 @@ def update_loop():
             cx, cy = screen_center
             last_real_pos = (cx, cy)
             SetCursorPos(cx, cy)
-        time.sleep(period)
 
+        # Lasketaan kauanko suoritukseen meni aikaa ja nukutaan VAIN jäljellä oleva aika
+        elapsed = time.perf_counter() - start_time
+        sleep_time = period - elapsed
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+            
 class ScrollableFrame(ttk.Frame):
     def __init__(self, container, width=860, height=700, *args, **kwargs):
         super().__init__(container, *args, **kwargs)
@@ -925,7 +961,6 @@ class App(tk.Tk):
         self.custom_widgets = []
         self.custom_rows_pool = []
         
-        # Alustetaan yhteinen profiilimuuttuja ennen widgettien luontia
         self.mouse_profile_var = tk.StringVar(value="soldier")
         
         self.create_widgets()
@@ -1116,6 +1151,18 @@ class App(tk.Tk):
         smooth_spin = tk.Spinbox(mouse_frame, from_=1, to=10, textvariable=self.smooth_var, width=5, command=self.update_mouse_config)
         smooth_spin.grid(column=1, row=9, padx=10, pady=8, sticky=tk.W)
         smooth_spin.bind("<KeyRelease>", lambda e: self.update_mouse_config())
+
+        ttk.Label(mouse_frame, text="Update Rate (Hz):").grid(row=10, column=0, sticky="w", padx=5, pady=2)
+
+        hz_var = tk.IntVar(value=cfg .get("update_rate_hz", 120))
+        hz_dropdown = ttk.Combobox(mouse_frame, textvariable=hz_var, values=[30, 60, 120, 250, 500], width=10, state="readonly")
+        hz_dropdown.grid(row=10, column=1, sticky="w", padx=5, pady=2)
+
+        def on_hz_change(event):
+            cfg ["update_rate_hz"] = int(hz_var.get())
+            save_config(cfg)
+
+        hz_dropdown.bind("<<ComboboxSelected>>", on_hz_change)
         
         # --- APPLICATION SETTINGS TAB ---
         ttk.Label(settings_frame, text="System Hotkeys & Global Emulation State", style="SubHeader.TLabel").grid(column=0, row=0, columnspan=3, sticky=tk.W, pady=(15,10), padx=20)
@@ -1368,7 +1415,7 @@ class App(tk.Tk):
         self.sens_y_var.set(m_cfg.get("sensitivity_y", 3.2))
         self.dead_x_var.set(m_cfg.get("deadzone_x", 0.0))
         self.dead_y_var.set(m_cfg.get("deadzone_y", 0.0))
-        self.gamma_var.set(m_cfg.get("linearity", 0.58))
+        self.gamma_var.set(m_cfg.get("linearity", 1.0))
         self.invert_y_var.set(m_cfg.get("invert_y", True))
         
         self.sens_x_lbl.config(text=f"{self.sens_x_var.get():.2f}")
@@ -1503,19 +1550,12 @@ class App(tk.Tk):
         import os
         import time
         try:
-            # 1. Puhdistetaan polku mahdollisista lainausmerkeistä
             exe_clean = os.path.normpath(exe.strip('"'))
             game_folder = os.path.dirname(exe_clean)
-            
-            # 2. KORJAUS ARGUMENTTEIHIN: 
-            # .bat tiedostossa %-merkit pitää tuplata (%%), muuten cmd.exe luulee niitä muuttujiksi ja tuhoaa ne.
-            # Esimerkki: --no-gui "%RPCS3_GAMEID%:NPEB00092" -> --no-gui "%%RPCS3_GAMEID%%:NPEB00092"
             bat_args = args.replace('%', '%%')
             
-            # 3. Luodaan väliaikainen bat-tiedosto samaan kansioon missä tämä työkalu on
             bat_path = os.path.abspath("launch_game.bat")
             
-            # Kirjoitetaan .bat tiedostoon komennot käyttäen korjattuja argumentteja (bat_args)
             with open(bat_path, "w", encoding="utf-8") as bat_file:
                 bat_file.write("@echo off\n")
                 bat_file.write(f'cd /d "{game_folder}"\n')
@@ -1524,11 +1564,9 @@ class App(tk.Tk):
                 else:
                     bat_file.write(f'start "" "{exe_clean}"\n')
             
-            # 4. Käynnistetään luotu .bat tiedosto explorerin kautta.
             cmd = f'explorer "{bat_path}"'
             subprocess.Popen(cmd, shell=True)
             
-            # 5. Poistetaan .bat tiedosto pienen viiveen jälkeen taustasäikeessä
             def cleanup_bat():
                 time.sleep(1.5)
                 try:
@@ -1610,7 +1648,6 @@ def start_listeners_and_loop():
     global kb_listener, ms_listener, running, gamepad
     running = True
     
-    # Alustetaan ja avataan uusi virtuaaliohjain vasta tässä kohdassa siististi
     try:
         gamepad = vg.VX360Gamepad()
     except Exception:
@@ -1628,7 +1665,6 @@ def stop_all():
     if kb_listener: kb_listener.stop()
     if ms_listener: ms_listener.stop()
     
-    # Suljetaan ja vapautetaan ohjain täysin Windowsin ViGEm-ajurista roikkumasta
     if gamepad:
         try:
             del gamepad
