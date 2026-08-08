@@ -1,4 +1,4 @@
-# VGamepad (v2.0)
+# VGamepad (v2.0.X)
 
 This app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
 
