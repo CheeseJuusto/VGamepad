@@ -1,19 +1,19 @@
-# VGamepad (v1.2)
+# VGamepad (v2.0)
 
-his app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
+This app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
 
-VGamepad is an advanced mouse and keyboard remapping utility built with Python, Tkinter, and Pygame that emulates a virtual Xbox 360 controller on Windows. It is specifically designed for simulation and shooter games that require seamless, on-the-fly profile switching (Soldier, Vehicle, Plane) and highly customizable mouse-to-analog-stick translation behavior.
+VGamepad is an advanced mouse and keyboard remapping utility built with Python, Tkinter, and low-level Windows APIs (`user32.dll` Raw Input) that emulates a virtual Xbox 360 controller on Windows. It is specifically designed for simulation and shooter games that require seamless, on-the-fly profile switching (Soldier, Vehicle, Plane) and highly customizable mouse-to-analog-stick translation behavior.
 
 ## Features
 
 - **Context-Specific Profiles:** Completely independent keybindings, mouse settings, and custom macro lists for three distinct game modes: *Soldier*, *Vehicle*, and *Plane*.
+- **Low-Level Raw Input Processing:** direct processing of low-level Windows `user32.dll` Raw Input via `ctypes`, handling unique hardware device IDs directly to eliminate background input leakage and improve accuracy.
 - **Dynamic Auxiliary Macros:** Dynamically configure between 0 to 20 custom macro rows or triggers per profile context directly from the interface.
 - **Advanced Mouse Emulation:**
   - Independent X/Y axis sensitivity and deadzone adjustments.
   - Linearity (Gamma/Curve) controls for precise aiming physics.
   - Centered mouse capture toggled via a hotkey, preserving pure raw mouse delta behavior.
   - Extended mouse mapping support (Mouse 1-5, Scroll Wheel Up/Down).
-- **Controller Passthrough:** Pygame integration enables simultaneous support for a physical gamepad alongside your mouse and keyboard inputs.
 - **Left Stick Limiter:** Built-in modifier for restricting analog stick input range (e.g., for walking/sneaking mechanics) with an adjustable multiplier slider and toggle.
 - **Game Launcher Management:** Specify a target game executable (`.exe`) and set custom boot arguments directly inside the UI.
 - **Automated Update Checks:** Embedded version control that checks for software updates directly from the GitHub repository on launch.
