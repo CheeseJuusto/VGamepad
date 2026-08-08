@@ -17,7 +17,7 @@
 # - Extended mouse mapping (mouse1-5, scroll_up/down)
 # - Mouse wheel scroll support added for UI menu/tab navigation
 # - RAW INPUT Integration for ultra-low latency mouse tracking & keyboard input
-# - Version v2.0.1
+# - Version v2.0.2
 #
 # Requires: vgamepad, pygame, requests, ViGEmBus driver installed on Windows
 
@@ -48,7 +48,7 @@ user32.DefWindowProcW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
 user32.DefWindowProcW.restype = ctypes.c_ssize_t
 
 # --- Sovelluksen nykyinen versio ---
-CURRENT_VERSION = "v2.0.1"
+CURRENT_VERSION = "v2.0.2"
 GITHUB_REPO = "CheeseJuusto/VGamepad" 
 
 # --- Oletuskonfiguraatio ---
@@ -114,7 +114,7 @@ DEFAULT_CONFIG = {
         "toggle_lock": "f5",
         "toggle_emulation": "f6"
     },
-    "emulation_enabled": True,
+    "emulation_enabled": False,
     "custom_count": 4,
     "custom_inputs": [
         {"name":"custom1","target":"cross","bind_key":"","description":""},
@@ -194,7 +194,7 @@ def load_config():
             if "toggle_emulation" not in loaded["hotkeys"]:
                 loaded["hotkeys"]["toggle_emulation"] = "f6"
             if "emulation_enabled" not in loaded:
-                loaded["emulation_enabled"] = True
+                loaded["emulation_enabled"] = False
             if "profiles_enabled" not in loaded:
                 loaded["profiles_enabled"] = DEFAULT_CONFIG["profiles_enabled"]
             if "soldier_key" not in loaded:
