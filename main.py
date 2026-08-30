@@ -26,9 +26,8 @@ def main():
     # Käynnistetään Tkinter GUI pääsäikeessä
     app = App()
 
-    # Automaattinen päivitystarkistus taustasäikeessä
-    update_check_thread = threading.Thread(target=app.check_update, kwargs={"silent": True}, daemon=True)
-    update_check_thread.start()
+    # Ajetaan päivitystarkistus vasta kun käyttöliittymä on käynnistynyt (1 sekunnin viiveellä)
+    app.after(1000, lambda: threading.Thread(target=app.check_update, kwargs={"silent": True}, daemon=True).start())
 
     def on_closing():
         mapper.running = False

@@ -2,7 +2,7 @@ import json
 import os
 from utils import CONFIG_FILE
 
-CURRENT_VERSION = "v3.0"
+CURRENT_VERSION = "v3.1"
 GITHUB_REPO = "CheeseJuusto/VGamepad"
 
 DEFAULT_CONFIG = {
@@ -33,9 +33,10 @@ DEFAULT_CONFIG = {
         "sensitivity_y": 3.2,
         "deadzone_x": 0.0,
         "deadzone_y": 0.0,
-        "anti_deadzone_x": 0.0,
-        "anti_deadzone_y": 0.0,
-        "linearity": 1.5,
+        "anti_deadzone_x": 0.25,
+        "anti_deadzone_y": 0.25,
+        "linearity_x": 1.0,
+        "linearity_y": 1.0,
         "invert_y": True,
         "pixel_to_unit": 100.0,
         "smoothing_samples": 1
@@ -46,9 +47,10 @@ DEFAULT_CONFIG = {
             "sensitivity_y": 4.2,
             "deadzone_x": 0.0,
             "deadzone_y": 0.0,
-            "anti_deadzone_x": 0.0,
-            "anti_deadzone_y": 0.0,
-            "linearity": 1.5,
+            "anti_deadzone_x": 0.25,
+            "anti_deadzone_y": 0.25,
+            "linearity_x": 1.0,
+            "linearity_y": 1.0,
             "invert_y": True
         },
         "plane": {
@@ -58,7 +60,8 @@ DEFAULT_CONFIG = {
             "deadzone_y": 0.0,
             "anti_deadzone_x": 0.0,
             "anti_deadzone_y": 0.0,
-            "linearity": 1.0,
+            "linearity_x": 1.0,
+            "linearity_y": 1.0,
             "invert_y": True
         }
     },
@@ -119,17 +122,30 @@ def ensure_config_defaults(loaded):
     if "mouse_profiles" not in loaded:
         loaded["mouse_profiles"] = {}
 
+    # Migraatio pääprofiilin (soldier/default) lineaarisuudelle
+    if "linearity" in loaded["mouse"]:
+        old_val = loaded["mouse"].pop("linearity")
+        loaded["mouse"]["linearity_x"] = old_val
+        loaded["mouse"]["linearity_y"] = old_val
+
     for key, val in DEFAULT_CONFIG["mouse"].items():
         if key not in loaded["mouse"]:
             loaded["mouse"][key] = val
 
+    # Migraatio aliprofiileille (vehicle, plane)
     for profile_name in ("vehicle", "plane"):
         if profile_name not in loaded["mouse_profiles"]:
             loaded["mouse_profiles"][profile_name] = DEFAULT_CONFIG["mouse_profiles"][profile_name].copy()
         else:
+            prof = loaded["mouse_profiles"][profile_name]
+            if "linearity" in prof:
+                old_val = prof.pop("linearity")
+                prof["linearity_x"] = old_val
+                prof["linearity_y"] = old_val
+
             for k, v in DEFAULT_CONFIG["mouse_profiles"][profile_name].items():
-                if k not in loaded["mouse_profiles"][profile_name]:
-                    loaded["mouse_profiles"][profile_name][k] = v
+                if k not in prof:
+                    prof[k] = v
 
     if "keyboard" not in loaded:
         loaded["keyboard"] = DEFAULT_CONFIG["keyboard"].copy()
