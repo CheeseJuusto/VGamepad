@@ -1,6 +1,6 @@
 # VGamepad - Keyboard & Mouse to Virtual Xbox 360 Controller Remapper
 
-**Version:** v3.0  
+**Version:** v3.X  
 **GitHub Repository:** [CheeseJuusto/VGamepad](https://github.com/CheeseJuusto/VGamepad)
 
 ## IMPORTANT - This app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
