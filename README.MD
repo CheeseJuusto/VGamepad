@@ -1,6 +1,6 @@
 # VGamepad - Keyboard & Mouse to Virtual Xbox 360 Controller Remapper
 
-**Version:** v3.X  
+**Version:** v3.2  
 **GitHub Repository:** [CheeseJuusto/VGamepad](https://github.com/CheeseJuusto/VGamepad)
 
 ## IMPORTANT - This app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
@@ -9,7 +9,7 @@ VGamepad is a high-performance input remapping tool designed for Windows. The ap
 
 ---
 
-## 🌟 Key Features (v3.0)
+## 🌟 Key Features (v3.X)
 
 - **ViGEmBus Virtual Controller (VX360Gamepad):** Reliable, low-latency Xbox 360 controller emulation.
 - **Raw Input Processing:** Utilizes the Windows Raw Input API to read mouse and keyboard hardware inputs directly without OS delays.
