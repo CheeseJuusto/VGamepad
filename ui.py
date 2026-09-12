@@ -92,12 +92,15 @@ class App(tk.Tk):
         self.custom_widgets = []
         self.custom_rows_pool = []
         self.menu_ui_elements = []
+        self.default_labels = {}
 
         self.mouse_profile_var = tk.StringVar(value="soldier")
         self.smooth_var = tk.IntVar(value=cfg.get("mouse", {}).get("smoothing_samples", 1))
 
         self.create_widgets()
         self.rebuild_custom_inputs_ui()
+
+        self.load_mouse_profile_ui()
 
     def create_widgets(self):
         top_bar = tk.Frame(self, bg="#ffffff", height=60, bd=0, highlightthickness=1, highlightbackground="#dee2e6")
@@ -193,29 +196,59 @@ class App(tk.Tk):
             self.leftstick_labels[dirk] = lbl
             row += 1
 
-        ttk.Label(self.keys_frame, text="Stick Limiter(Walk)", font=("Segoe UI", 10), width=15).grid(column=0, row=row, padx=10, pady=8, sticky=tk.W)
+        # STICK LIMITER - RIVI (Sijoitettu suoraan self.keys_frameen samalle ruudukolle)
+        ttk.Label(self.keys_frame, text="Stick Limiter(Walk)", font=("Segoe UI", 10), width=15).grid(column=0, row=row, padx=10, pady=5, sticky=tk.W)
+
         self.limiter_lbl = ttk.Label(self.keys_frame, text=cfg.get("left_stick_limiter", {}).get("bind_key", "ctrl_l"), width=16, style="KeyBind.TLabel", padding=4)
-        self.limiter_lbl.grid(column=1, row=row, padx=10, pady=8, sticky=tk.EW)
+        self.limiter_lbl.grid(column=1, row=row, padx=10, pady=5, sticky=tk.EW)
 
         btn_lim_bind = ttk.Button(self.keys_frame, text="Bind", width=6, command=lambda t="limiter", k="bind_key", w=self.limiter_lbl: mapper.start_recording(t, k, w))
-        btn_lim_bind.grid(column=2, row=row, padx=(5, 2), pady=8)
+        btn_lim_bind.grid(column=2, row=row, padx=(5, 2), pady=5)
 
         btn_lim_clear = ttk.Button(self.keys_frame, text="Clear", width=6, command=lambda t="limiter", k="bind_key", w=self.limiter_lbl: mapper.clear_binding(t, k, w))
-        btn_lim_clear.grid(column=3, row=row, padx=(2, 5), pady=8)
+        btn_lim_clear.grid(column=3, row=row, padx=(2, 5), pady=5)
 
+        # Toggle Mode (Sarake 4)
         self.limiter_toggle_var = tk.BooleanVar(value=cfg.get("left_stick_limiter", {}).get("is_toggle", False))
         chk_lim = ttk.Checkbutton(self.keys_frame, text="Toggle Mode", variable=self.limiter_toggle_var, command=self.on_limiter_toggle_changed)
-        chk_lim.grid(column=4, row=row, sticky=tk.W, padx=10, pady=8)
+        chk_lim.grid(column=4, row=row, sticky=tk.W, padx=10, pady=5)
 
+        # Liukukytkin (Sarake 5)
         slider_frame = ttk.Frame(self.keys_frame)
-        slider_frame.grid(column=5, row=row, columnspan=2, sticky=tk.W, padx=10, pady=8)
-        ttk.Label(slider_frame, text="Rate: ", foreground="#6c757d").pack(side="left")
+        slider_frame.grid(column=5, row=row, padx=10, pady=5, sticky=tk.W)
+        
+        lbl_rate = ttk.Label(slider_frame, text="Rate: ")
+        lbl_rate.pack(side="left")
 
-        self.limiter_val_var = tk.DoubleVar(value=cfg.get("left_stick_limiter", {}).get("value", 0.5))
+        self.limiter_val_var = tk.DoubleVar(value=cfg.get("left_stick_limiter", {}).get("value", 0.55))
         sld_lim = ttk.Scale(slider_frame, from_=0.1, to=1.0, variable=self.limiter_val_var, orient=tk.HORIZONTAL, length=120, command=lambda e: self.on_limiter_val_changed())
         sld_lim.pack(side="left", padx=5)
+
+        self.limiter_val_lbl = ttk.Label(slider_frame, text=f"{self.limiter_val_var.get():.2f}", font=("Consolas", 10))
+        self.limiter_val_lbl.pack(side="left", padx=5)
+
+        lbl_rate_def = ttk.Label(slider_frame, text=f"({DEFAULT_CONFIG['left_stick_limiter']['value']})", foreground="#6c757d")
+        lbl_rate_def.pack(side="left", padx=(0, 5))
+
         row += 1
 
+        # Run input -valintaruutu Toggle Moden alle (Sarake 4, seuraava rivi)
+        self.run_disables_limiter_var = tk.BooleanVar(value=cfg.get("left_stick_limiter", {}).get("disable_on_run", True))
+
+        def on_run_disable_toggle():
+            cfg["left_stick_limiter"]["disable_on_run"] = self.run_disables_limiter_var.get()
+            save_config(cfg)
+
+        chk_run_disable = ttk.Checkbutton(
+            self.keys_frame,
+            text="Run input (L3) turns off Toggle",
+            variable=self.run_disables_limiter_var,
+            command=on_run_disable_toggle
+        )
+        chk_run_disable.grid(column=4, row=row, columnspan=2, padx=10, pady=(0, 5), sticky=tk.W)
+
+        row += 1
+        
         btn_reset_kb = ttk.Button(self.keys_frame, text="Reset Keyboard Defaults", command=self.reset_keyboard_defaults)
         btn_reset_kb.grid(column=0, row=row, columnspan=2, padx=10, pady=15, sticky=tk.W)
         row += 1
@@ -251,75 +284,90 @@ class App(tk.Tk):
             ent.bind("<KeyRelease>", lambda e: self.update_mouse_config(from_entry=True))
             return ent
 
+        def create_label(parent, main_text, row_idx):
+            ttk.Label(parent, text=f"{main_text}:").grid(column=0, row=row_idx, padx=20, pady=8, sticky=tk.W)
+
+        def create_default_label(parent, key, row_idx):
+            lbl = ttk.Label(parent, text="", foreground="#6c757d")
+            lbl.grid(column=4, row=row_idx, padx=(0, 10), pady=8, sticky=tk.W)
+            self.default_labels[key] = lbl
+            return lbl
+
         # Sensitivity X
-        ttk.Label(mouse_frame, text="Sensitivity X:").grid(column=0, row=2, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Sensitivity X", 2)
         self.sens_x_var = tk.DoubleVar(value=cfg["mouse"]["sensitivity_x"])
         self.sens_x_scale = ttk.Scale(mouse_frame, from_=0.1, to=10.0, variable=self.sens_x_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.sens_x_scale.grid(column=1, row=2, padx=10, pady=8, sticky=tk.W)
         self.sens_x_ent = create_entry(mouse_frame, self.sens_x_var, 2)
+        create_default_label(mouse_frame, "sensitivity_x", 2)
 
         # Sensitivity Y
-        ttk.Label(mouse_frame, text="Sensitivity Y:").grid(column=0, row=3, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Sensitivity Y", 3)
         self.sens_y_var = tk.DoubleVar(value=cfg["mouse"]["sensitivity_y"])
         self.sens_y_scale = ttk.Scale(mouse_frame, from_=0.1, to=10.0, variable=self.sens_y_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.sens_y_scale.grid(column=1, row=3, padx=10, pady=8, sticky=tk.W)
         self.sens_y_ent = create_entry(mouse_frame, self.sens_y_var, 3)
+        create_default_label(mouse_frame, "sensitivity_y", 3)
 
         # Deadzone X
-        ttk.Label(mouse_frame, text="Deadzone X:").grid(column=0, row=4, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Deadzone X", 4)
         self.dead_x_var = tk.DoubleVar(value=cfg["mouse"]["deadzone_x"])
         self.dead_x_scale = ttk.Scale(mouse_frame, from_=0.0, to=0.5, variable=self.dead_x_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.dead_x_scale.grid(column=1, row=4, padx=10, pady=8, sticky=tk.W)
         self.dead_x_ent = create_entry(mouse_frame, self.dead_x_var, 4)
+        create_default_label(mouse_frame, "deadzone_x", 4)
 
         # Deadzone Y
-        ttk.Label(mouse_frame, text="Deadzone Y:").grid(column=0, row=5, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Deadzone Y", 5)
         self.dead_y_var = tk.DoubleVar(value=cfg["mouse"]["deadzone_y"])
         self.dead_y_scale = ttk.Scale(mouse_frame, from_=0.0, to=0.5, variable=self.dead_y_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.dead_y_scale.grid(column=1, row=5, padx=10, pady=8, sticky=tk.W)
         self.dead_y_ent = create_entry(mouse_frame, self.dead_y_var, 5)
+        create_default_label(mouse_frame, "deadzone_y", 5)
 
         # Anti-Deadzone X
-        ttk.Label(mouse_frame, text="Anti-Deadzone X:").grid(column=0, row=6, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Anti-Deadzone X", 6)
         self.adz_x_var = tk.DoubleVar(value=cfg["mouse"].get("anti_deadzone_x", 0.25))
         self.adz_x_scale = ttk.Scale(mouse_frame, from_=0.0, to=1.0, variable=self.adz_x_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.adz_x_scale.grid(column=1, row=6, padx=10, pady=8, sticky=tk.W)
         self.adz_x_ent = create_entry(mouse_frame, self.adz_x_var, 6)
+        create_default_label(mouse_frame, "anti_deadzone_x", 6)
 
         # Anti-Deadzone Y
-        ttk.Label(mouse_frame, text="Anti-Deadzone Y:").grid(column=0, row=7, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Anti-Deadzone Y", 7)
         self.adz_y_var = tk.DoubleVar(value=cfg["mouse"].get("anti_deadzone_y", 0.25))
         self.adz_y_scale = ttk.Scale(mouse_frame, from_=0.0, to=1.0, variable=self.adz_y_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.adz_y_scale.grid(column=1, row=7, padx=10, pady=8, sticky=tk.W)
         self.adz_y_ent = create_entry(mouse_frame, self.adz_y_var, 7)
+        create_default_label(mouse_frame, "anti_deadzone_y", 7)
 
         # Linearity X (Gamma)
-        ttk.Label(mouse_frame, text="Linearity X (Gamma):").grid(column=0, row=8, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Linearity X (Gamma)", 8)
         self.gamma_x_var = tk.DoubleVar(value=cfg["mouse"].get("linearity_x", 1.0))
         self.gamma_x_scale = ttk.Scale(mouse_frame, from_=0.1, to=2.0, variable=self.gamma_x_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.gamma_x_scale.grid(column=1, row=8, padx=10, pady=8, sticky=tk.W)
         self.gamma_x_ent = create_entry(mouse_frame, self.gamma_x_var, 8)
+        create_default_label(mouse_frame, "linearity_x", 8)
 
         # Linearity Y (Gamma)
-        ttk.Label(mouse_frame, text="Linearity Y (Gamma):").grid(column=0, row=9, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Linearity Y (Gamma)", 9)
         self.gamma_y_var = tk.DoubleVar(value=cfg["mouse"].get("linearity_y", 1.0))
         self.gamma_y_scale = ttk.Scale(mouse_frame, from_=0.1, to=2.0, variable=self.gamma_y_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.gamma_y_scale.grid(column=1, row=9, padx=10, pady=8, sticky=tk.W)
         self.gamma_y_ent = create_entry(mouse_frame, self.gamma_y_var, 9)
+        create_default_label(mouse_frame, "linearity_y", 9)
 
         self.invert_y_var = tk.BooleanVar(value=cfg["mouse"]["invert_y"])
         self.invert_y_chk = ttk.Checkbutton(mouse_frame, text="Invert Y Axis", variable=self.invert_y_var, command=self.update_mouse_config)
         self.invert_y_chk.grid(column=0, row=10, columnspan=2, padx=20, pady=8, sticky=tk.W)
 
         # Pixel to Unit Factor
-        ttk.Label(mouse_frame, text="Pixel to Unit Factor:").grid(column=0, row=11, padx=20, pady=8, sticky=tk.W)
+        create_label(mouse_frame, "Pixel to Unit Factor", 11)
         self.pt_unit_var = tk.DoubleVar(value=cfg["mouse"].get("pixel_to_unit", 100.0))
         self.pt_unit_scale = ttk.Scale(mouse_frame, from_=5.0, to=100.0, variable=self.pt_unit_var, orient=tk.HORIZONTAL, length=200, command=lambda e: self.update_mouse_config())
         self.pt_unit_scale.grid(column=1, row=11, padx=10, pady=8, sticky=tk.W)
         self.pt_unit_ent = create_entry(mouse_frame, self.pt_unit_var, 11)
-
-        self.pt_unit_lbl = ttk.Label(mouse_frame, text=f"{self.pt_unit_var.get():.1f}")
-        self.pt_unit_lbl.grid(column=3, row=11, padx=5, pady=8, sticky=tk.W)
+        create_default_label(mouse_frame, "pixel_to_unit", 11)
         
         # Update Rate
         ttk.Label(mouse_frame, text="Update Rate (Hz):").grid(row=13, column=0, sticky="w", padx=20, pady=8)
@@ -471,28 +519,33 @@ class App(tk.Tk):
 
     def load_mouse_profile_ui(self):
         ctx = mapper.current_profile_context
+        
+        # Määritetään aktiiviset ja oletuskokoonpanot profiilin mukaan
         if cfg.get("profiles_enabled", False) and ctx in ("vehicle", "plane"):
             p_data = cfg.get("mouse_profiles", {}).get(ctx, {})
-            self.sens_x_var.set(p_data.get("sensitivity_x", 3.0))
-            self.sens_y_var.set(p_data.get("sensitivity_y", 3.2))
-            self.dead_x_var.set(p_data.get("deadzone_x", 0.0))
-            self.dead_y_var.set(p_data.get("deadzone_y", 0.0))
-            self.adz_x_var.set(p_data.get("anti_deadzone_x", 0.25))
-            self.adz_y_var.set(p_data.get("anti_deadzone_y", 0.25))
-            self.gamma_x_var.set(p_data.get("linearity_x", 1.0))
-            self.gamma_y_var.set(p_data.get("linearity_y", 1.0))
-            self.invert_y_var.set(p_data.get("invert_y", True))
+            def_data = DEFAULT_CONFIG.get("mouse_profiles", {}).get(ctx, {})
         else:
-            m_data = cfg.get("mouse", {})
-            self.sens_x_var.set(m_data.get("sensitivity_x", 3.0))
-            self.sens_y_var.set(m_data.get("sensitivity_y", 3.2))
-            self.dead_x_var.set(m_data.get("deadzone_x", 0.0))
-            self.dead_y_var.set(m_data.get("deadzone_y", 0.0))
-            self.adz_x_var.set(m_data.get("anti_deadzone_x", 0.25))
-            self.adz_y_var.set(m_data.get("anti_deadzone_y", 0.25))
-            self.gamma_x_var.set(m_data.get("linearity_x", 1.0))
-            self.gamma_y_var.set(m_data.get("linearity_y", 1.0))
-            self.invert_y_var.set(m_data.get("invert_y", True))
+            p_data = cfg.get("mouse", {})
+            def_data = DEFAULT_CONFIG.get("mouse", {})
+
+        # Päivitetään syötekenttien ja liukukytkimien arvot
+        self.sens_x_var.set(p_data.get("sensitivity_x", def_data.get("sensitivity_x", 3.0)))
+        self.sens_y_var.set(p_data.get("sensitivity_y", def_data.get("sensitivity_y", 3.2)))
+        self.dead_x_var.set(p_data.get("deadzone_x", def_data.get("deadzone_x", 0.0)))
+        self.dead_y_var.set(p_data.get("deadzone_y", def_data.get("deadzone_y", 0.0)))
+        self.adz_x_var.set(p_data.get("anti_deadzone_x", def_data.get("anti_deadzone_x", 0.25)))
+        self.adz_y_var.set(p_data.get("anti_deadzone_y", def_data.get("anti_deadzone_y", 0.25)))
+        self.gamma_x_var.set(p_data.get("linearity_x", def_data.get("linearity_x", 1.0)))
+        self.gamma_y_var.set(p_data.get("linearity_y", def_data.get("linearity_y", 1.0)))
+        self.invert_y_var.set(p_data.get("invert_y", def_data.get("invert_y", True)))
+
+        # Päivitetään suluissa olevat oletusarvomerkinnät (default labels)
+        if hasattr(self, "default_labels"):
+            for key, lbl in self.default_labels.items():
+                if key in def_data:
+                    lbl.config(text=f"({def_data[key]})")
+                elif key in DEFAULT_CONFIG["mouse"]:
+                    lbl.config(text=f"({DEFAULT_CONFIG['mouse'][key]})")
 
     def on_mouse_profile_tab_changed(self):
         new_ctx = self.mouse_profile_var.get()
@@ -563,12 +616,24 @@ class App(tk.Tk):
             self.mouse_curve_win.refresh()
 
     def reset_mouse_defaults(self):
-        cfg["mouse"] = DEFAULT_CONFIG["mouse"].copy()
-        cfg["mouse_profiles"] = DEFAULT_CONFIG["mouse_profiles"].copy()
+        ctx = mapper.current_profile_context
+        
+        if cfg.get("profiles_enabled", False) and ctx in ("vehicle", "plane"):
+            # Palautetaan ajoneuvo-/lentokoneprofiilin oletusarvot
+            if "mouse_profiles" not in cfg:
+                cfg["mouse_profiles"] = {}
+            cfg["mouse_profiles"][ctx] = DEFAULT_CONFIG["mouse_profiles"][ctx].copy()
+        else:
+            # Palautetaan Soldier / perushiiren oletusarvot
+            cfg["mouse"] = DEFAULT_CONFIG["mouse"].copy()
+
         save_config(cfg)
+        
+        # Päivitetään UI ja mahdolliset graafit
         self.load_mouse_profile_ui()
         self.pt_unit_var.set(cfg["mouse"]["pixel_to_unit"])
         self.smooth_var.set(cfg["mouse"].get("smoothing_samples", 1))
+        
         if hasattr(self, "pt_unit_lbl"):
             self.pt_unit_lbl.config(text=f"{self.pt_unit_var.get():.1f}")
         if hasattr(self, 'mouse_curve_win') and self.mouse_curve_win.winfo_exists():
@@ -629,7 +694,7 @@ class App(tk.Tk):
             curr_row += 2
 
             targets = list(cfg.get("keyboard", {}).keys())
-            targets.extend(["soldier_profile", "vehicle_profile", "plane_profile"])
+            targets.extend(["dpad_left", "dpad_right", "soldier_profile", "vehicle_profile", "plane_profile"])
 
             for i in range(c_count):
                 while len(cfg["custom_inputs"]) <= i:
@@ -723,6 +788,13 @@ class App(tk.Tk):
     def on_limiter_val_changed(self):
         cfg["left_stick_limiter"]["value"] = round(self.limiter_val_var.get(), 2)
         save_config(cfg)
+
+    def on_limiter_val_changed(self):
+        val = round(self.limiter_val_var.get(), 2)
+        cfg["left_stick_limiter"]["value"] = val
+        save_config(cfg)
+        if hasattr(self, 'limiter_val_lbl'):
+            self.limiter_val_lbl.config(text=f"{val:.2f}")
 
     def on_master_toggle_changed(self):
         state = self.emulation_enabled_var.get()

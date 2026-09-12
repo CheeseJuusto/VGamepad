@@ -8,7 +8,7 @@ import math
 from config import cfg, save_config
 from utils import (
     SetCursorPos, set_cursor_visible, update_screen_center,
-    apply_deadzone_value, apply_anti_deadzone, apply_linearity
+    apply_deadzone_value, apply_linearity
 )
 
 gamepad = None
@@ -51,45 +51,9 @@ def reevaluate_active_inputs():
     for kname in list(physically_pressed_keys):
         simulate_key_press(kname)
 
-import math
-
-def apply_anti_deadzone(vx: float, vy: float, adz_x: float, adz_y: float) -> tuple[float, float]:
-    """
-    Sovelletaan anti-deadzonea ympyrän tai soikion muotoisena.
-    Lasketaan hiiren liikkeen suuntakulma ja skaalataan akselit siten,
-    että pienin liike hyppää suoraan pelin deadzonen ulkopuolelle.
-    """
-    if vx == 0.0 and vy == 0.0:
-        return 0.0, 0.0
-
-    magnitude = math.hypot(vx, vy)
-    if magnitude == 0.0:
-        return 0.0, 0.0
-
-    angle = math.atan2(vy, vx)
-
-    cos_a = math.cos(angle)
-    sin_a = math.sin(angle)
-    
-    # Elliptisen/pyöreän anti-deadzonen kynnys vektorin suuntaan
-    adz_angle = math.sqrt((adz_x * cos_a) ** 2 + (adz_y * sin_a) ** 2)
-
-    if adz_angle >= 1.0:
-        return vx, vy
-
-    # Skaalataan liike välille [adz_angle, 1.0]
-    scaled_magnitude = adz_angle + magnitude * (1.0 - adz_angle)
-    scaled_magnitude = min(1.0, scaled_magnitude)
-
-    new_vx = scaled_magnitude * cos_a
-    new_vy = scaled_magnitude * sin_a
-
-    return new_vx, new_vy
 
 def apply_mouse_processing(vx: float, vy: float, adz_x: float, adz_y: float) -> tuple[float, float]:
-    """
-    Sovelletaan ympyrän/soikion muotoista anti-deadzonea.
-    """
+    """Sovelletaan ympyrän/soikion muotoista anti-deadzonea."""
     if vx == 0.0 and vy == 0.0:
         return 0.0, 0.0
 
@@ -101,17 +65,14 @@ def apply_mouse_processing(vx: float, vy: float, adz_x: float, adz_y: float) -> 
     cos_a = math.cos(angle)
     sin_a = math.sin(angle)
 
-    # Lasketaan anti-deadzonen kynnys vektorin suuntaan
     adz_angle = math.sqrt((adz_x * cos_a) ** 2 + (adz_y * sin_a) ** 2)
 
-    # Skaalataan liike anti-deadzonen yli välille [adz_angle, 1.0]
     if adz_angle < 1.0:
         scaled_magnitude = adz_angle + magnitude * (1.0 - adz_angle)
         scaled_magnitude = min(1.0, scaled_magnitude)
     else:
         scaled_magnitude = magnitude
 
-    # Muunnetaan takaisin X- ja Y-komponenteiksi
     new_vx = scaled_magnitude * cos_a
     new_vy = scaled_magnitude * sin_a
 
@@ -145,11 +106,17 @@ def simulate_key_press(kname):
             break
         if ci.get("bind_key") == kname:
             target = ci.get("target")
-            xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
-            if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
-                triggers_pressed.add(xinp)
+            # Käsittele dpad_left ja dpad_right mukautetuissa kohteissa
+            if target == "dpad_left":
+                buttons_pressed.add("DPAD_LEFT")
+            elif target == "dpad_right":
+                buttons_pressed.add("DPAD_RIGHT")
             else:
-                if xinp: buttons_pressed.add(xinp)
+                xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
+                if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
+                    triggers_pressed.add(xinp)
+                else:
+                    if xinp: buttons_pressed.add(xinp)
 
     for dirk, keybind in cfg.get("left_stick", {}).items():
         if keybind == kname:
@@ -210,8 +177,9 @@ def bind_and_save(target_type, target_key, bind_name, widget=None):
         cfg[target_key] = bind_name
     elif target_type == "hotkey_passthrough":
         cfg["hotkeys"]["toggle_passthrough"] = bind_name
+
     save_config(cfg)
-    
+
     target_widget = widget or recording_widget
     if target_widget:
         try: target_widget.config(text=bind_name)
@@ -223,7 +191,6 @@ def bind_and_save(target_type, target_key, bind_name, widget=None):
 
 
 def start_recording(target_type, key_name, widget):
-    """Aloittaa näppäimen nauhoituksen."""
     global recording_target, recording_widget
     recording_target = (target_type, key_name)
     recording_widget = widget
@@ -232,17 +199,14 @@ def start_recording(target_type, key_name, widget):
 
 
 def record_button_press(target_type, target_key, widget):
-    """Aloittaa nauhoituksen (yhteensopiva Application Settings -valikon kanssa)."""
     start_recording(target_type, target_key, widget)
 
 
 def record_button_release(event):
-    """Käsittelee painikkeen vapautuksen (tarvittaessa)."""
     pass
 
 
 def clear_binding(target_type, key_name, widget):
-    """Tyhjentää valitun näppäinsidonnan suoraan."""
     global recording_target, recording_widget
     if recording_target:
         recording_target = None
@@ -288,15 +252,13 @@ def on_key_press_raw(kname):
         recording_target = None
         recording_widget = None
         if app_instance:
-            try: 
+            try:
                 app_instance.status_var.set(f"Bound {kname}")
-                # Päivitetään Tkinter-ikkunan sidonta jos kyseessä oli passthrough-hotkey
                 if ttype == "hotkey_passthrough":
                     app_instance.rebind_passthrough_shortcut()
             except Exception: pass
         return
 
-    # Passthrough-pikanäppäimen tarkistus
     pt_hk = cfg.get("hotkeys", {}).get("toggle_passthrough", "f8").lower()
     if kname == pt_hk and pt_hk != "":
         if app_instance:
@@ -338,13 +300,19 @@ def on_key_press_raw(kname):
             set_profile_context("plane")
             return
 
-    lk = cfg.get("left_stick_limiter", {}).get("bind_key", "ctrl_l").lower()
-    if kname == lk and lk != "":
+    lim_key = cfg.get("left_stick_limiter", {}).get("bind_key", "").lower()
+    if kname == lim_key and lim_key != "":
         if cfg.get("left_stick_limiter", {}).get("is_toggle", False):
             limiter_active = not limiter_active
         else:
             limiter_active = True
+        simulate_key_press(kname)
         return
+
+    l3_bind = cfg.get("keyboard", {}).get("l3", {}).get("bind_key", "").lower()
+    if kname == l3_bind and l3_bind != "":
+        if cfg.get("left_stick_limiter", {}).get("disable_on_run", False):
+            limiter_active = False
 
     simulate_key_press(kname)
 
@@ -387,12 +355,17 @@ def on_key_release_raw(kname):
             break
         if ci.get("bind_key") == kname:
             target = ci.get("target")
-            xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
-            if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
-                if xinp in triggers_pressed: triggers_pressed.discard(xinp)
+            if target == "dpad_left":
+                buttons_pressed.discard("DPAD_LEFT")
+            elif target == "dpad_right":
+                buttons_pressed.discard("DPAD_RIGHT")
             else:
-                if xinp and xinp in buttons_pressed:
-                    buttons_pressed.discard(xinp)
+                xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
+                if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
+                    if xinp in triggers_pressed: triggers_pressed.discard(xinp)
+                else:
+                    if xinp and xinp in buttons_pressed:
+                        buttons_pressed.discard(xinp)
 
     for dirk, keybind in cfg.get("left_stick", {}).items():
         if keybind == kname:
@@ -461,13 +434,20 @@ def on_click(x, y, keyname, pressed):
             break
         if ci.get("bind_key") == keyname:
             target = ci.get("target")
-            xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
-            if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
-                if pressed: triggers_pressed.add(xinp)
-                else: triggers_pressed.discard(xinp)
+            if target == "dpad_left":
+                if pressed: buttons_pressed.add("DPAD_LEFT")
+                else: buttons_pressed.discard("DPAD_LEFT")
+            elif target == "dpad_right":
+                if pressed: buttons_pressed.add("DPAD_RIGHT")
+                else: buttons_pressed.discard("DPAD_RIGHT")
             else:
-                if pressed: buttons_pressed.add(xinp)
-                else: buttons_pressed.discard(xinp)
+                xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
+                if xinp in ("LEFT_TRIGGER", "RIGHT_TRIGGER"):
+                    if pressed: triggers_pressed.add(xinp)
+                    else: triggers_pressed.discard(xinp)
+                else:
+                    if pressed: buttons_pressed.add(xinp)
+                    else: buttons_pressed.discard(xinp)
 
     for dirk, keybind in cfg.get("left_stick", {}).items():
         if keybind == keyname:
@@ -545,9 +525,14 @@ def on_scroll(x, y, dx, dy):
 
         if ci.get("bind_key") == keyname:
             target = ci.get("target")
-            xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
-            if xinp:
-                pulse_button(xinp)
+            if target == "dpad_left":
+                pulse_button("DPAD_LEFT")
+            elif target == "dpad_right":
+                pulse_button("DPAD_RIGHT")
+            else:
+                xinp = cfg.get("keyboard", {}).get(target, {}).get("xinput", "").upper()
+                if xinp:
+                    pulse_button(xinp)
 
     for mkey, bind in cfg.get("menu_buttons", {}).items():
         if bind != keyname:
@@ -607,7 +592,7 @@ def check_input_match(js, bound_str):
 
 def update_loop():
     global last_user_move_time, mouse_locked, screen_center, last_real_pos, limiter_active, current_profile_context, gamepad
-    global target_rx, target_ry
+    global target_rx, target_ry, raw_mouse_x, raw_mouse_y
 
     pygame.init()
     pygame.joystick.init()
@@ -723,9 +708,14 @@ def update_loop():
                     pass
 
         if target_lx == 0.0 and target_ly == 0.0:
-            lx = max(-1.0, min(1.0, left_stick_state["x"]))
-            ly = max(-1.0, min(1.0, left_stick_state["y"]))
+            lx = left_stick_state["x"]
+            ly = left_stick_state["y"]
             
+            mag = math.hypot(lx, ly)
+            if mag > 1.0:
+                lx /= mag
+                ly /= mag
+
             if limiter_active:
                 mod = float(cfg.get("left_stick_limiter", {}).get("value", 0.5))
                 lx *= mod
@@ -733,54 +723,47 @@ def update_loop():
                 
             target_lx, target_ly = lx, ly
 
-        if target_rx == 0.0 and target_ry == 0.0:
-            global raw_mouse_x, raw_mouse_y
-            
-            if mouse_dx_queue:
-                sum_dx = sum(mouse_dx_queue)
-                sum_dy = sum(mouse_dy_queue)
-                mouse_dx_queue.clear()
-                mouse_dy_queue.clear()
-                
-                # Lasketaan raaka-arvot liikkeestä
-                new_raw_x = min(1.0, abs((sum_dx / pixel_to_unit) * sens_x))
-                new_raw_y = min(1.0, abs((sum_dy / pixel_to_unit) * sens_y))
-                
-                raw_mouse_x = new_raw_x
-                raw_mouse_y = new_raw_y
-            else:
-                sum_dx = 0.0
-                sum_dy = 0.0
-                # Vaimennetaan arvoja pehmeästi nollaa kohti, jotta UI ehtii piirtää ne
-                raw_mouse_x *= 0.85
-                raw_mouse_y *= 0.85
-                if raw_mouse_x < 0.01: raw_mouse_x = 0.0
-                if raw_mouse_y < 0.01: raw_mouse_y = 0.0
+        # Luentajonon tyhjennys ja laskenta luetaan aina jokaisella silmukan kierroksella
+        if mouse_dx_queue:
+            sum_dx = sum(mouse_dx_queue)
+            sum_dy = sum(mouse_dy_queue)
+            mouse_dx_queue.clear()
+            mouse_dy_queue.clear()
+        else:
+            sum_dx = 0.0
+            sum_dy = 0.0
 
-            raw_x = (sum_dx / pixel_to_unit) * sens_x
-            raw_y = (sum_dy / pixel_to_unit) * sens_y
+        raw_x = (sum_dx / pixel_to_unit) * sens_x
+        raw_y = (sum_dy / pixel_to_unit) * sens_y
 
-            # Päivitetään raakasyöte visualisoinnille (skaalattuna 0.0 - 1.0)
+        if sum_dx != 0.0 or sum_dy != 0.0:
             raw_mouse_x = min(1.0, abs(raw_x))
             raw_mouse_y = min(1.0, abs(raw_y))
+        else:
+            raw_mouse_x *= 0.85
+            raw_mouse_y *= 0.85
+            if raw_mouse_x < 0.01: raw_mouse_x = 0.0
+            if raw_mouse_y < 0.01: raw_mouse_y = 0.0
 
-            vx = apply_deadzone_value(raw_x, dead_x)
-            vy = apply_deadzone_value(raw_y, dead_y)
+        vx = apply_deadzone_value(raw_x, dead_x)
+        vy = apply_deadzone_value(raw_y, dead_y)
 
-            # Lasketaan anti-deadzone
-            vx, vy = apply_mouse_processing(vx, vy, adz_x, adz_y)
+        vx, vy = apply_mouse_processing(vx, vy, adz_x, adz_y)
 
-            if gamma_x != 1.0 and vx != 0:
-                vx = apply_linearity(vx, gamma_x)
-            if gamma_y != 1.0 and vy != 0:
-                vy = apply_linearity(vy, gamma_y)
+        if gamma_x != 1.0 and vx != 0:
+            vx = apply_linearity(vx, gamma_x)
+        if gamma_y != 1.0 and vy != 0:
+            vy = apply_linearity(vy, gamma_y)
 
-            vx = max(-1.0, min(1.0, vx))
-            vy = max(-1.0, min(1.0, vy))
+        vx = max(-1.0, min(1.0, vx))
+        vy = max(-1.0, min(1.0, vy))
 
-            if invert_y:
-                vy = -vy
-            target_rx, target_ry = vx, vy
+        if invert_y:
+            vy = -vy
+
+        # Ohjaimen oikean tatin arvo: yhdistetään akselisyötteet (passthrough + hiiri)
+        target_rx = max(-1.0, min(1.0, target_rx + vx))
+        target_ry = max(-1.0, min(1.0, target_ry + vy))
 
         if "LEFT_TRIGGER" in triggers_pressed: target_lt = 255
         if "RIGHT_TRIGGER" in triggers_pressed: target_rt = 255
@@ -815,7 +798,6 @@ def update_loop():
         sleep_time = period - elapsed
         if sleep_time > 0:
             time.sleep(sleep_time)
-
 
 def toggle_mouse_lock():
     global mouse_locked, last_real_pos

@@ -2,7 +2,7 @@ import json
 import os
 from utils import CONFIG_FILE
 
-CURRENT_VERSION = "v3.1"
+CURRENT_VERSION = "v3.2"
 GITHUB_REPO = "CheeseJuusto/VGamepad"
 
 DEFAULT_CONFIG = {
@@ -19,19 +19,21 @@ DEFAULT_CONFIG = {
         "r1": {"display": "R1", "bind_key": "mouse1", "xinput": "RIGHT_SHOULDER"},
         "l2": {"display": "L2", "bind_key": "g", "xinput": "LEFT_TRIGGER"},
         "r2": {"display": "R2", "bind_key": "q", "xinput": "RIGHT_TRIGGER"},
-        "l3": {"display": "L3", "bind_key": "shift", "xinput": "LEFT_THUMB"},
+        "l3": {"display": "L3", "bind_key": "shift_l", "xinput": "LEFT_THUMB"},
         "r3": {"display": "R3", "bind_key": "c", "xinput": "RIGHT_THUMB"},
         "select": {"display": "Select", "bind_key": "tab", "xinput": "BACK"},
         "start": {"display": "Start", "bind_key": "esc", "xinput": "START"},
         "dpad_up": {"display": "Dpad Up", "bind_key": "c", "xinput": "DPAD_UP"},
-        "dpad_down": {"display": "Dpad Down", "bind_key": "b", "xinput": "DPAD_DOWN"}
+        "dpad_down": {"display": "Dpad Down", "bind_key": "b", "xinput": "DPAD_DOWN"},
+        "dpad_left": {"display": "Dpad Left", "bind_key": "", "xinput": "DPAD_LEFT"},
+        "dpad_right": {"display": "Dpad Right", "bind_key": "", "xinput": "DPAD_RIGHT"}
     },
     "keyboard_vehicle": {},
     "keyboard_plane": {},
     "mouse": {
         "sensitivity_x": 3.0,
         "sensitivity_y": 3.2,
-        "deadzone_x": 0.0,
+        "deadzone_x": 01.0,
         "deadzone_y": 0.0,
         "anti_deadzone_x": 0.25,
         "anti_deadzone_y": 0.25,
@@ -58,8 +60,8 @@ DEFAULT_CONFIG = {
             "sensitivity_y": 8.4,
             "deadzone_x": 0.0,
             "deadzone_y": 0.0,
-            "anti_deadzone_x": 0.0,
-            "anti_deadzone_y": 0.0,
+            "anti_deadzone_x": 0.25,
+            "anti_deadzone_y": 0.25,
             "linearity_x": 1.0,
             "linearity_y": 1.0,
             "invert_y": True
@@ -68,9 +70,10 @@ DEFAULT_CONFIG = {
     "update_rate_hz": 120,
     "hotkeys": {
         "toggle_lock": "f5",
-        "toggle_emulation": "f6"
+        "toggle_emulation": "f6",
+        "toggle_passthrough": "f8"
     },
-    "emulation_enabled": True,
+    "emulation_enabled": False,
     "custom_count": 4,
     "custom_inputs": [
         {"name": "custom1", "target": "cross", "bind_key": "", "description": ""},
@@ -82,7 +85,8 @@ DEFAULT_CONFIG = {
     "left_stick_limiter": {
         "bind_key": "ctrl_l",
         "is_toggle": True,
-        "value": 0.45
+        "value": 0.55,
+        "disable_on_run": True
     },
     "menu_buttons": {"up": "up", "down": "down", "left": "left", "right": "right", "select": "enter", "back": "backspace"},
     "game_settings": {
@@ -91,7 +95,8 @@ DEFAULT_CONFIG = {
     },
     "controller_passthrough": {
         "enabled": False,
-        "selected_index": 0
+        "selected_index": 0,
+        "bindings": {}
     }
 }
 
@@ -109,7 +114,9 @@ ACTION_DESCRIPTIONS = {
     "select":   {"soldier": "Command / Score", "vehicle": "Command / Score", "airplane": "Command / Score"},
     "start":    {"soldier": "In-Game Menu", "vehicle": "In-Game Menu", "airplane": "In-Game Menu"},
     "dpad_up":  {"soldier": "-", "vehicle": "Change Camera", "airplane": "Change Camera"},
-    "dpad_down": {"soldier": "-", "vehicle": "Look back", "airplane": "Look back"}
+    "dpad_down": {"soldier": "-", "vehicle": "Look back", "airplane": "Look back"},
+    "dpad_left":  {"soldier": "-", "vehicle": "-", "airplane": "-"},
+    "dpad_right": {"soldier": "-", "vehicle": "-", "airplane": "-"}
 }
 
 
@@ -122,7 +129,7 @@ def ensure_config_defaults(loaded):
     if "mouse_profiles" not in loaded:
         loaded["mouse_profiles"] = {}
 
-    # Migraatio pääprofiilin (soldier/default) lineaarisuudelle
+    # Migraatio pääprofiilin lineaarisuudelle
     if "linearity" in loaded["mouse"]:
         old_val = loaded["mouse"].pop("linearity")
         loaded["mouse"]["linearity_x"] = old_val
@@ -157,6 +164,9 @@ def ensure_config_defaults(loaded):
         loaded["left_stick"] = DEFAULT_CONFIG["left_stick"].copy()
     if "left_stick_limiter" not in loaded:
         loaded["left_stick_limiter"] = DEFAULT_CONFIG["left_stick_limiter"].copy()
+    else:
+        if "disable_on_run" not in loaded["left_stick_limiter"]:
+            loaded["left_stick_limiter"]["disable_on_run"] = True
     if "custom_inputs" not in loaded:
         loaded["custom_inputs"] = DEFAULT_CONFIG["custom_inputs"].copy()
     if "custom_count" not in loaded:
@@ -169,6 +179,8 @@ def ensure_config_defaults(loaded):
         loaded["hotkeys"]["toggle_lock"] = "f5"
     if "toggle_emulation" not in loaded["hotkeys"]:
         loaded["hotkeys"]["toggle_emulation"] = "f6"
+    if "toggle_passthrough" not in loaded["hotkeys"]:
+        loaded["hotkeys"]["toggle_passthrough"] = "f8"
     if "emulation_enabled" not in loaded:
         loaded["emulation_enabled"] = True
     if "profiles_enabled" not in loaded:
@@ -192,7 +204,7 @@ def load_config():
         return DEFAULT_CONFIG.copy()
 
 
-current_config_path = None  # Seurataan aktiivista tiedostopolkua
+current_config_path = None
 
 
 def save_config(config_data, custom_path=None):
@@ -201,7 +213,6 @@ def save_config(config_data, custom_path=None):
     if custom_path:
         current_config_path = custom_path
 
-    # Jos erillistä polkua ei ole määritelty, käytetään oletustiedostoa (config.json)
     target_path = current_config_path if current_config_path else CONFIG_FILE
 
     try:

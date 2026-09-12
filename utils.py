@@ -53,7 +53,7 @@ def normalize_vk_code(vk, is_e0=False):
         0x09: "tab",
         0x1B: "esc",
         0x08: "backspace",
-        0x10: "shift_r" if is_e0 else "shift",
+        0x10: "shift_r" if is_e0 else "shift_l",
         0x11: "ctrl_r" if is_e0 else "ctrl_l",
         0x12: "alt_r" if is_e0 else "alt_l",
         0x25: "left",

@@ -1,8 +1,11 @@
+import os
+import sys
 import tkinter as tk
 from tkinter import ttk
 import math
 import config
 from config import cfg
+from utils import BASE_DIR
 
 class MouseCurveWidget(ttk.Frame):
     def __init__(self, parent=None, width=380, height=300):
@@ -227,6 +230,14 @@ class MouseCurveWindow(tk.Toplevel):
         self.title("Mouse Response Curve & Live Input")
         self.geometry("460x360")
         self.configure(bg="#f8f9fa")
+
+        # Asetetaan ikkunan kuvake app.ico
+        icon_path = os.path.join(getattr(sys, '_MEIPASS', BASE_DIR), "app.ico")
+        if os.path.exists(icon_path):
+            try:
+                self.iconbitmap(icon_path)
+            except Exception:
+                pass
 
         self.attributes("-topmost", True)
         self.resizable(True, True)
