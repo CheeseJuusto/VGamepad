@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
     "mouse": {
         "sensitivity_x": 3.0,
         "sensitivity_y": 3.2,
-        "deadzone_x": 01.0,
+        "deadzone_x": 0.0,
         "deadzone_y": 0.0,
         "anti_deadzone_x": 0.25,
         "anti_deadzone_y": 0.25,
