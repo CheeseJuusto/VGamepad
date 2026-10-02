@@ -1,6 +1,6 @@
 # VGamepad - Keyboard & Mouse to Virtual Xbox 360 Controller Remapper
 
-**Version:** v3.2  
+**Version:** v3.3  
 **GitHub Repository:** [CheeseJuusto/VGamepad](https://github.com/CheeseJuusto/VGamepad)
 
 ## IMPORTANT - This app is made ONLY for emulators. Using the app with native PC games may result in your account being BANNED.
@@ -18,16 +18,20 @@ VGamepad is a high-performance input remapping tool designed for Windows. The ap
 - **Advanced Mouse Fine-Tuning:**
   - Independent X and Y axis sensitivity
   - Deadzones and Anti-Deadzones
-  - Linearity / Gamma curve adjustment
+  - Linearity / Gamma curve adjustment (includes Unfocus button in Linear Graph view for accurate visualization)
   - Invert Y-axis option
   - Mouse smoothing samples and Pixel-to-Unit conversion factor
+- **Easy Config Management:**
+  - Save and load configuration files with ease
+  - "Save Config" defaults to the active configuration file name
+  - Dedicated "Add new Config" button to quickly set up new profiles
+  - Option to disable auto-save via "Disable auto save" button
 - **Controller Passthrough:** Connect a physical USB controller and pass its inputs directly through to the emulated controller, or remap its axes and buttons.
 - **Auxiliary Macros:** Define up to 20 custom macro/input slots for custom actions.
 - **Left Stick Limiter (Walk Key):** Emulate walk/run states with an analog stick multiplier (supports Toggle/Hold modes).
 - **In-Game Mouse Lock:** Locks the cursor to the center of the screen/emulator window in windowed and fullscreen modes.
 - **Direct Game Launch Integration:** Specify the executable path and launch arguments (e.g., RPCS3 `--no-gui` flags) directly inside the app.
-- **Make config files** for other games, save and load it easily
-- **Enhanced UI** and simplified application structure
+- **Enhanced UI:** Refined graphical user interface and streamlined application structure.
 
 ---
 
@@ -64,6 +68,7 @@ VGamepad features three main tabs:
 
 2. **🖱️ Mouse Input Settings:**
    - Adjust Right Stick emulation parameters including sensitivity, deadzones, anti-deadzones, and linearity for X and Y axes.
+   - Use the Linear Graph view (with Unfocus support) to inspect curve adjustments.
    - Configure profile-specific mouse behavior for Soldier, Vehicle, and Plane modes.
    - Set the update rate (**Update Rate HZ**: 30, 60, 100, 120 Hz) and mouse smoothing samples.
 
@@ -72,6 +77,7 @@ VGamepad features three main tabs:
      - `F5` *(default)*: Toggle Mouse Lock (Locks/unlocks the mouse cursor).
      - `F6` *(default)*: Toggle Master Emulation (Enables/disables overall emulation).
      - `F8` *(default)*: Toggle Passthrough (Enables/disables physical controller passthrough).
+   - **Config Management:** Create new configs ("Add new Config"), toggle auto-save behavior ("Disable auto save"), and save to the active profile name.
    - **Controller Passthrough:** Configure physical USB controller axes and button mappings.
    - **Game Settings:** Set the path to your game or emulator executable (`executable_path`) and set startup commands (`arguments`).
    - **Context Profiles Toggle:** Enable or disable context-sensitive profiles and assign profile-switching keys.
@@ -80,7 +86,7 @@ VGamepad features three main tabs:
 
 ## ⚙️ Configuration File (`config.json`)
 
-The application automatically creates and manages a `config.json` file in its folder. Below is an example default configuration (`v3.0`):
+The application automatically creates and manages configuration files in its folder. Below is an example default configuration structure:
 
 ```json
 {
