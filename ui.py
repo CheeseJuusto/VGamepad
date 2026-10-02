@@ -4,6 +4,7 @@ import json
 import urllib.request
 import webbrowser
 import subprocess
+import copy
 from collections import deque
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
@@ -19,15 +20,32 @@ import config
 class ScrollableFrame(ttk.Frame):
     def __init__(self, container, width=860, height=700, *args, **kwargs):
         super().__init__(container, *args, **kwargs)
-        self.canvas = tk.Canvas(self, borderwidth=0, highlightthickness=0, width=width, height=height, bg="#f8f9fa")
-        scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        
+        self.canvas = tk.Canvas(
+            self, 
+            borderwidth=0, 
+            highlightthickness=0, 
+            width=width, 
+            height=height, 
+            bg="#f8f9fa"
+        )
+        
+        self.scrollbar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
         self.scrollable_frame = ttk.Frame(self.canvas, style="TFrame")
-        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
+        self.scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
+        )
+
+        self.canvas_frame = self.canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
+        self.canvas.configure(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.pack(side="right", fill="y")
         self.canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.canvas.bind('<Configure>', self._on_canvas_configure)
         self._bind_mouse_wheel(self)
+
+    def _on_canvas_configure(self, event):
+        self.canvas.itemconfig(self.canvas_frame, width=event.width)
 
     def _bind_mouse_wheel(self, widget):
         widget.bind("<MouseWheel>", self._on_mouse_wheel)
@@ -48,7 +66,7 @@ class App(tk.Tk):
         super().__init__()
         mapper.app_instance = self
         self.title("vgamepad Mapping Toolkit")
-        self.geometry("1040x880")
+        self.geometry("1040x920")
         self.configure(bg="#f8f9fa")
 
         self.status_var = tk.StringVar(value="Ready")
@@ -125,9 +143,9 @@ class App(tk.Tk):
         nb = ttk.Notebook(self)
         nb.pack(fill="both", expand=True, padx=20, pady=15)
 
-        sf_keys = ScrollableFrame(nb, width=980, height=720)
-        sf_mouse = ScrollableFrame(nb, width=980, height=720)
-        sf_settings = ScrollableFrame(nb, width=980, height=720)
+        sf_keys = ScrollableFrame(nb, width=1120, height=740)
+        sf_mouse = ScrollableFrame(nb, width=1120, height=740)
+        sf_settings = ScrollableFrame(nb, width=1120, height=740)
 
         nb.add(sf_keys, text="⌨️Keyboard Mapping")
         nb.add(sf_mouse, text="🖱️Mouse Input Settings")
@@ -151,30 +169,38 @@ class App(tk.Tk):
         main_desc = ttk.Label(self.keys_frame, text="Configure keyboard inputs to emulate controller actions. Press 'Bind' to set a key.", style="SubHeader.TLabel")
         main_desc.grid(column=0, row=1, columnspan=7, sticky=tk.W, pady=(10, 15), padx=20)
 
-        headers = ["Gamepad Target", "Current Binding", "Action", "Clear Action", "Soldier Context", "Vehicle Context", "Aircraft Context"]
+        self.keys_frame.grid_columnconfigure(1, weight=0)
+        for c in range(4, 7):
+            self.keys_frame.grid_columnconfigure(c, weight=1)
+
+        headers = ["Gamepad Target", "Current Binding", "Action", "Clear Action", "Soldier Context", "Vehicle Context"]
         for i, h in enumerate(headers):
             lbl_h = ttk.Label(self.keys_frame, text=h, font=("Segoe UI", 9, "bold"), foreground="#6c757d")
-            lbl_h.grid(column=i, row=2, padx=10, pady=8, sticky=tk.W if i != 1 else tk.EW)
+            pad_x = (15, 8) if i == 5 else 8
+            lbl_h.grid(column=i, row=2, padx=pad_x, pady=8, sticky=tk.W if i != 1 else tk.EW)
+        lbl_aircraft = ttk.Label(self.keys_frame, text="Aircraft Context", font=("Segoe UI", 9, "bold"), foreground="#6c757d")
+        lbl_aircraft.grid(column=5, row=2, padx=(152, 8), pady=8, sticky=tk.W)
 
         self.bind_widgets = {}
         row = 3
         for ps_key, entry in cfg.get("keyboard", {}).items():
             display = entry.get("display", ps_key)
-            ttk.Label(self.keys_frame, text=display, font=("Segoe UI", 10, "bold"), width=15).grid(column=0, row=row, padx=10, pady=6, sticky=tk.W)
+            ttk.Label(self.keys_frame, text=display, font=("Segoe UI", 10, "bold"), width=12).grid(column=0, row=row, padx=(10, 2), pady=6, sticky=tk.W)
 
-            lbl = ttk.Label(self.keys_frame, text=entry.get("bind_key", ""), width=16, style="KeyBind.TLabel", padding=4)
-            lbl.grid(column=1, row=row, padx=10, pady=6, sticky=tk.EW)
+            lbl = ttk.Label(self.keys_frame, text=entry.get("bind_key", ""), width=12, style="KeyBind.TLabel", padding=4)
+            lbl.grid(column=1, row=row, padx=2, pady=6, sticky=tk.EW)
 
-            btn_bind = ttk.Button(self.keys_frame, text="Bind", width=6, command=lambda t="keyboard", k=ps_key, w=lbl: mapper.start_recording(t, k, w))
-            btn_bind.grid(column=2, row=row, padx=(5, 2), pady=6)
+            btn_bind = ttk.Button(self.keys_frame, text="Bind", width=5, command=lambda t="keyboard", k=ps_key, w=lbl: mapper.start_recording(t, k, w))
+            btn_bind.grid(column=2, row=row, padx=2, pady=6)
 
-            btn_clear = ttk.Button(self.keys_frame, text="Clear", width=6, command=lambda t="keyboard", k=ps_key, w=lbl: mapper.clear_binding(t, k, w))
-            btn_clear.grid(column=3, row=row, padx=(2, 5), pady=6)
+            btn_clear = ttk.Button(self.keys_frame, text="Clear", width=5, command=lambda t="keyboard", k=ps_key, w=lbl: mapper.clear_binding(t, k, w))
+            btn_clear.grid(column=3, row=row, padx=(2, 6), pady=6)
 
             desc = ACTION_DESCRIPTIONS.get(ps_key, {"soldier": "-", "vehicle": "-", "airplane": "-"})
-            ttk.Label(self.keys_frame, text=desc["soldier"], foreground="#495057").grid(column=4, row=row, padx=10, pady=6, sticky=tk.W)
-            ttk.Label(self.keys_frame, text=desc["vehicle"], foreground="#495057").grid(column=5, row=row, padx=10, pady=6, sticky=tk.W)
-            ttk.Label(self.keys_frame, text=desc["airplane"], foreground="#495057").grid(column=6, row=row, padx=10, pady=6, sticky=tk.W)
+            # Suurennettu tekstikenttien leveyttä (width=16) ja lisätty vasenta väliä sarakkeeseen 5 ("Vehicle Context")
+            ttk.Label(self.keys_frame, text=desc.get("soldier", "-"), foreground="#495057", width=16, anchor="w").grid(column=4, row=row, padx=6, pady=6, sticky=tk.W)
+            ttk.Label(self.keys_frame, text=desc.get("vehicle", "-"), foreground="#495057", width=16, anchor="w").grid(column=5, row=row, padx=(15, 6), pady=6, sticky=tk.W)
+            ttk.Label(self.keys_frame, text=desc.get("airplane", "-"), foreground="#495057", width=16, anchor="w").grid(column=5, row=row, padx=(152, 6), pady=6, sticky=tk.W)
 
             self.bind_widgets[ps_key] = lbl
             row += 1
@@ -493,8 +519,21 @@ class App(tk.Tk):
         cfg_btn_frame = ttk.Frame(settings_frame)
         cfg_btn_frame.grid(column=0, row=16, columnspan=3, padx=20, pady=20, sticky=tk.EW)
 
+        self.disable_autosave_var = tk.BooleanVar(value=cfg.get("disable_autosave", False))
+        chk_autosave = ttk.Checkbutton(
+            settings_frame,
+            text="Disable Autosave",
+            variable=self.disable_autosave_var,
+            command=self.on_disable_autosave_toggled
+        )
+        chk_autosave.grid(column=0, row=16, columnspan=3, padx=20, pady=(15, 5), sticky=tk.W)
+
+        cfg_btn_frame = ttk.Frame(settings_frame)
+        cfg_btn_frame.grid(column=0, row=17, columnspan=3, padx=20, pady=15, sticky=tk.EW)
+
         ttk.Button(cfg_btn_frame, text="Save Config File", command=self.save_config_file).pack(side="left", padx=5)
         ttk.Button(cfg_btn_frame, text="Load Config File", command=self.load_config_file).pack(side="left", padx=5)
+        ttk.Button(cfg_btn_frame, text="Add new Config", command=self.add_new_config_file).pack(side="left", padx=5)
         ttk.Button(cfg_btn_frame, text="Check for Updates", command=lambda: self.check_update(silent=False)).pack(side="left", padx=5)
 
         self.version_lbl = ttk.Label(cfg_btn_frame, text=f"Active Local Software Version: {CURRENT_VERSION}", foreground="#6c757d")
@@ -855,14 +894,20 @@ class App(tk.Tk):
             self.bind(f"<{pt_key.upper()}>", lambda e: self.toggle_passthrough_shortcut())
 
     def save_config_file(self):
+        current_path = getattr(config, "current_config_path", CONFIG_FILE)
+        initial_filename = os.path.basename(current_path) if current_path else "config.json"
+
         file_path = filedialog.asksaveasfilename(
             initialdir=BASE_DIR,
+            initialfile=initial_filename,
             defaultextension=".json",
             filetypes=[("JSON Files", "*.json")],
+            title="Save Config File As"
         )
         if file_path:
             try:
                 save_config(cfg, custom_path=file_path)
+                config.current_config_path = file_path
                 self.active_config_name_var.set(os.path.basename(file_path))
                 messagebox.showinfo(
                     "Config Saved", f"Configuration saved to:\n{file_path}"
@@ -887,6 +932,7 @@ class App(tk.Tk):
                 config.current_config_path = file_path
                 save_config(cfg)
 
+                self.disable_autosave_var.set(cfg.get("disable_autosave", False))
                 self.active_config_name_var.set(os.path.basename(file_path))
                 self.refresh_keyboard_bindings_ui()
                 self.load_mouse_profile_ui()
@@ -922,6 +968,54 @@ class App(tk.Tk):
                 messagebox.showerror(
                     "Error", f"Failed to load configuration:\n{e}"
                 )
+
+    def add_new_config_file(self):
+        file_path = filedialog.asksaveasfilename(
+            initialdir=BASE_DIR,
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json")],
+            title="Create New Config File"
+        )
+        if file_path:
+            try:
+                # Kopioidaan oletusasetukset
+                new_cfg = copy.deepcopy(DEFAULT_CONFIG)
+                
+                # Tallennetaan uusi asetustiedosto annetulla nimellä
+                save_config(new_cfg, custom_path=file_path)
+                
+                # Asetetaan uusi tiedosto aktiiviseksi konfiguraatioksi
+                cfg.clear()
+                cfg.update(new_cfg)
+                config.current_config_path = file_path
+                save_config(cfg)
+
+                # Päivitetään UI-elementit vastaamaan oletusasetuksia
+                self.active_config_name_var.set(os.path.basename(file_path))
+                self.refresh_keyboard_bindings_ui()
+                self.load_mouse_profile_ui()
+                self.custom_count_var.set(cfg.get("custom_count", 4))
+                self.rebuild_custom_inputs_ui()
+                self.emulation_enabled_var.set(cfg.get("emulation_enabled", True))
+                self.pt_enabled_var.set(cfg.get("controller_passthrough", {}).get("enabled", False))
+                self.profiles_enabled_var.set(cfg.get("profiles_enabled", False))
+                self.hk_lock_lbl.config(text=cfg.get("hotkeys", {}).get("toggle_lock", "f5"))
+                self.hk_emu_lbl.config(text=cfg.get("hotkeys", {}).get("toggle_emulation", "f6"))
+                self.soldier_key_lbl.config(text=cfg.get("soldier_key", "z"))
+                self.vehicle_key_lbl.config(text=cfg.get("vehicle_key", "x"))
+                self.plane_key_lbl.config(text=cfg.get("plane_key", "v"))
+                self.exec_path_var.set(cfg.get("game_settings", {}).get("executable_path", ""))
+                self.exec_args_var.set(cfg.get("game_settings", {}).get("arguments", ""))
+                self.on_profiles_toggled()
+
+                messagebox.showinfo("New Config Created", f"New default configuration created and loaded:\n{file_path}")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to create new configuration:\n{e}")
+
+    def on_disable_autosave_toggled(self):
+        state = self.disable_autosave_var.get()
+        cfg["disable_autosave"] = state
+        save_config(cfg, custom_path=config.current_config_path)
 
     def start_game(self):
         start_game_process(self)

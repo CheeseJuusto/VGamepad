@@ -2,10 +2,11 @@ import json
 import os
 from utils import CONFIG_FILE
 
-CURRENT_VERSION = "v3.2"
+CURRENT_VERSION = "v3.3"
 GITHUB_REPO = "CheeseJuusto/VGamepad"
 
 DEFAULT_CONFIG = {
+    "disable_autosave": False,
     "profiles_enabled": False,
     "soldier_key": "z",
     "vehicle_key": "x",
@@ -210,10 +211,15 @@ current_config_path = None
 def save_config(config_data, custom_path=None):
     global current_config_path
 
+    # Jos custom_path on annettu (esim. Save Config File / Add new Config), päivitetään aktiivinen polku
     if custom_path:
         current_config_path = custom_path
 
     target_path = current_config_path if current_config_path else CONFIG_FILE
+
+    # Jos automaattitallennus on estetty EIKÄ kyseessä ole manuaalinen tallennus (custom_path), poistutaan
+    if custom_path is None and config_data.get("disable_autosave", False):
+        return
 
     try:
         with open(target_path, "w", encoding="utf-8") as f:

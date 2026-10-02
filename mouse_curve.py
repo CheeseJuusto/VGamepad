@@ -1,5 +1,6 @@
 import os
 import sys
+import ctypes
 import tkinter as tk
 from tkinter import ttk
 import math
@@ -228,7 +229,7 @@ class MouseCurveWindow(tk.Toplevel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.title("Mouse Response Curve & Live Input")
-        self.geometry("460x360")
+        self.geometry("460x390")
         self.configure(bg="#f8f9fa")
 
         # Asetetaan ikkunan kuvake app.ico
@@ -242,8 +243,30 @@ class MouseCurveWindow(tk.Toplevel):
         self.attributes("-topmost", True)
         self.resizable(True, True)
 
+        # Sidotaan välilyönti (SPACE) unfocus-toimintoon
+        self.bind("<space>", lambda event: self.unfocus_window())
+
+        # Yläpalkki unfocus-painikkeelle
+        self.top_bar = ttk.Frame(self)
+        self.top_bar.pack(fill="x", padx=10, pady=(8, 0))
+
+        self.btn_unfocus = ttk.Button(
+            self.top_bar,
+            text="Unfocus Window [SPACE]",
+            command=self.unfocus_window
+        )
+        self.btn_unfocus.pack(side="right")
+
         self.widget = MouseCurveWidget(self, width=440, height=310)
         self.widget.pack(fill="both", expand=True, padx=10, pady=10)
+
+    def unfocus_window(self):
+        """Siirtää Windows-fokuksen pois tästä ikkunasta Työpöydälle / Windows Shellille."""
+        try:
+            hwnd_desktop = ctypes.windll.user32.GetDesktopWindow()
+            ctypes.windll.user32.SetForegroundWindow(hwnd_desktop)
+        except Exception:
+            pass
 
     def refresh(self):
         if hasattr(self.widget, "draw_graph"):
